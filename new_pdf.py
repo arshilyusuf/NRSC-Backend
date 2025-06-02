@@ -1,3 +1,4 @@
+# new_pdf.py
 import fitz  
 import re
 import os
@@ -119,11 +120,11 @@ technical domains = [
     except Exception as e:
         print(f"⚠️ Error processing {file_name}: {e}")
 
-# ✅ Example usage
+# CLI usage (optional)
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
         print("Usage: python new_pdf.py path/to/newfile.pdf")
     else:
         process_new_pdf(sys.argv[1])
-        time.sleep(5)  # Optional delay between requests
+        time.sleep(5)

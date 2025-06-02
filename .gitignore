@@ -3,3 +3,5 @@ __pycache__/
 .env
 *.env
 structured_project_data.csv
+node_modules/
+.env.*
