@@ -1,4 +1,5 @@
-pdf_folder
-__pycache__
+pdf_folder/
+__pycache__/
 .env
+*.env
 structured_project_data.csv
