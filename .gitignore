@@ -1,0 +1,4 @@
+pdf_folder
+__pycache__
+.env
+structured_project_data.csv
