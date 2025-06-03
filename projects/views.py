@@ -5,14 +5,15 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers, status
 from django.conf import settings
-from . import counter  # For counting PDF uploads
-from .new_pdf import process_new_pdf  # ✅ Import the processing function
+from . import counter
+from .pdf_processor import process_new_pdf
+
 
 class ProjectListAPIView(APIView):
     def get(self, request):
         file_path = os.path.join(settings.BASE_DIR, 'parsed_data.json')
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:  # <-- FIXED HERE
                 projects = json.load(f)
             return Response(projects)
         except FileNotFoundError:
@@ -30,7 +31,6 @@ class PDFUploadSerializer(serializers.Serializer):
         return value
 
 # PDF upload view
-# PDF upload view
 class PDFUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
@@ -39,11 +39,10 @@ class PDFUploadView(APIView):
         if serializer.is_valid():
             file = serializer.validated_data['file']
 
-            # Set upload directory
+            # Create pdf_folder if it doesn't exist
             upload_dir = os.path.join(settings.BASE_DIR, 'pdf_folder')
             os.makedirs(upload_dir, exist_ok=True)
 
-            # Get the next available number from the counter
             next_number = counter.get_next_count()
             new_filename = f'project_report ({next_number}).pdf'
             file_path = os.path.join(upload_dir, new_filename)
@@ -53,9 +52,8 @@ class PDFUploadView(APIView):
                 for chunk in file.chunks():
                     destination.write(chunk)
 
-            # ✅ Trigger Gemini processing with project_id
-            from . import new_pdf  # Ensure relative import
-            new_pdf.process_new_pdf(file_path, project_id=next_number)
+            # Process the PDF
+            process_new_pdf(file_path, project_id=next_number)
 
             return Response({
                 "message": "PDF uploaded and processed successfully",
@@ -83,10 +81,12 @@ class AssignGradeAPIView(APIView):
                             f.seek(0)
                             json.dump(projects, f, indent=4)
                             f.truncate()
-                            return Response({"message": f"Grade assigned successfully to project {project_id}"}, status=status.HTTP_200_OK)
+                            return Response({"message": f"Grade assigned successfully to project {project_id}"})
                     return Response({"error": f"Project with id {project_id} not found"}, status=status.HTTP_404_NOT_FOUND)
             except FileNotFoundError:
                 return Response({"error": "JSON file not found"}, status=status.HTTP_404_NOT_FOUND)
             except json.JSONDecodeError:
                 return Response({"error": "Invalid JSON format"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
