@@ -30,6 +30,7 @@ class PDFUploadSerializer(serializers.Serializer):
         return value
 
 # PDF upload view
+# PDF upload view
 class PDFUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
@@ -44,8 +45,6 @@ class PDFUploadView(APIView):
 
             # Get the next available number from the counter
             next_number = counter.get_next_count()
-
-            # Generate the new filename
             new_filename = f'project_report ({next_number}).pdf'
             file_path = os.path.join(upload_dir, new_filename)
 
@@ -54,8 +53,9 @@ class PDFUploadView(APIView):
                 for chunk in file.chunks():
                     destination.write(chunk)
 
-            # ✅ Trigger Gemini processing
-            process_new_pdf(file_path)
+            # ✅ Trigger Gemini processing with project_id
+            from . import new_pdf  # Ensure relative import
+            new_pdf.process_new_pdf(file_path, project_id=next_number)
 
             return Response({
                 "message": "PDF uploaded and processed successfully",
