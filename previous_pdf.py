@@ -7,6 +7,7 @@ import pandas as pd
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# Load API key from .env
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
@@ -60,8 +61,7 @@ def get_pdf_dataframe():
 df_input = get_pdf_dataframe()
 output_data = []
 
-# ✅ JSON save target
-# ✅ JSON save target
+# ✅ Load existing JSON if available
 json_path = "parsed_data.json"
 if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
     with open(json_path, "r", encoding="utf-8") as f:
@@ -79,35 +79,30 @@ for _, row in df_input.iterrows():
     full_text = row["Full Text"]
 
     prompt = f"""
-You are a helpful assistant. Extract and return only a JSON object with the following fields:
+You are an intelligent and precise information extraction assistant. From the provided project document text, extract and return ONLY a JSON object with the following fields:
+
 {{
   "filename": "{file_name}",
   "Project Title": "",
   "Student Name": "",
   "College Name": "",
-  "Professor Name": "",
-  "Technical Domain": "",
-  "Application Domain": "",
+  "Guide Name": "",
+  "Domain": "",  // This field must be chosen strictly from the list below
   "Abstract": ""
 }}
 
-Text: ```{full_text}```
+The "Domain" field must contain exactly one of the following categories (whichever is most relevant to the text content):
 
-IMPORTANT: Return ONLY the JSON object with no other text, no code blocks, no explanations.
+["Research based or innovation", "Technology Demonstration", "Software Development", "Hardware Development", "Cyber security", "AI", "ML", "DEEP LEARNING", "IOT", "Neural Netwrok", "Block Chain", "Agriculture", "Disaster Management Support", "Forestry & Ecology", "Geosciences", "LULC", "Rural Development", "Soils", "Urban & Infrastructure", "Water Resources", "Earth and Climatic Studies"]
 
-Allowed application domains = [
-    "Agriculture", "Disaster Management Support", "Forestry & Ecology", "Geosciences", "LULC",
-    "Rural Development", "Soils", "Urban & Infrastructure", "Water Resources",
-    "Earth and Climatic Studies", "Miscelleaneous"
-]
+In case of ambiguity, choose the **most relevant** single domain based on the overall context.
 
-Allowed technical domains = [
-    "Remote Sensing and GIS", "App Development", "Web Development", "AI/ML",
-    "Image Processing/Computer Vision", "Data Science / Big Data Analytics",
-    "Cloud Computing / High Performance Computing", "IoT", "Sensor Integration",
-    "Drone Data Processing and Integration", "AR/VR", "Robotics",
-    "Embedded Systems", "3D Printing / Fabrication Technology"
-]
+Text:
+```{full_text}```
+
+IMPORTANT:
+- Return ONLY the JSON object.
+- Do NOT include any additional text, code blocks, or explanations.
 """.strip()
 
     try:
@@ -121,14 +116,12 @@ Allowed technical domains = [
             "project_title": result.get("Project Title", "N/A"),
             "student_name": result.get("Student Name", "N/A"),
             "college_name": result.get("College Name", "N/A"),
-            "professor_name": result.get("Professor Name", "N/A"),
-            "technical_domain": result.get("Technical Domain", "N/A"),
-            "application_domain": result.get("Application Domain", "N/A"),
-            "abstract": result.get("Abstract", "N/A"),
-            "grade": "N/A"
+            "guide_name": result.get("Guide Name", "N/A"),
+            "domain": result.get("Domain", "N/A"),
+            "abstract": result.get("Abstract", "N/A")
+           
         }
 
-        # ✅ Add to both CSV and JSON
         output_data.append(entry)
         parsed_json_data.append(entry)
 
