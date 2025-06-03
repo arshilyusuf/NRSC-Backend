@@ -48,7 +48,7 @@ You are an intelligent and precise information extraction assistant. From the pr
   "Student Name": "",
   "College Name": "",
   "Guide Name": "",
-  "domain": "",  // This field must be chosen strictly from the list below
+  "Domain": "",  // This field must be chosen strictly from the list below
   "Abstract": ""
 }}
 
@@ -68,8 +68,23 @@ IMPORTANT:
 
     try:
         response = model.generate_content(prompt)
-        cleaned_response = clean_json_response(response.text)
-        result = json.loads(cleaned_response)
+response_text = response.text.strip()
+
+if not response_text:
+    raise ValueError("❌ Empty response from Gemini API.")
+
+cleaned_response = clean_json_response(response_text)
+
+if not cleaned_response:
+    raise ValueError("❌ Cleaned response is empty. Possibly missing JSON or improperly formatted.")
+
+try:
+    result = json.loads(cleaned_response)
+except json.JSONDecodeError as e:
+    print("⚠ JSON decode error. Raw response:")
+    print(response_text)
+    raise e
+
 
         # ✅ Read structured_project_data.json
         with open("structured_project_data.json", "r", encoding="utf-8") as f:
@@ -84,14 +99,14 @@ IMPORTANT:
             "student_name": result.get("Student Name", "N/A"),
             "college_name": result.get("College Name", "N/A"),
             "guide_name": result.get("Guide Name", "N/A"),
-            "domain": result.get("domain", "N/A"),
+            "domain": result.get("Domain", "N/A"),
             "abstract": result.get("Abstract", "N/A")
         }
 
         # ✅ Save to structured_project_data.json
-        current_data.append(entry)
-        with open("structured_project_data.json", "w", encoding="utf-8") as f:
-            json.dump(current_data, f, indent=2, ensure_ascii=False)
+        # current_data.append(entry)
+        # with open("structured_project_data.json", "w", encoding="utf-8") as f:
+        #     json.dump(current_data, f, indent=2, ensure_ascii=False)
 
         # ✅ Save to parsed_data.json
         if os.path.exists("parsed_data.json"):
