@@ -1,5 +1,4 @@
-# new_pdf.py
-import fitz  
+import fitz
 import re
 import os
 import json
@@ -68,47 +67,24 @@ IMPORTANT:
 
     try:
         response = model.generate_content(prompt)
-response_text = response.text.strip()
+        response_text = response.text.strip()
 
-if not response_text:
-    raise ValueError("❌ Empty response from Gemini API.")
+        if not response_text:
+            raise ValueError("❌ Empty response from Gemini API.")
 
-cleaned_response = clean_json_response(response_text)
+        cleaned_response = clean_json_response(response_text)
 
-if not cleaned_response:
-    raise ValueError("❌ Cleaned response is empty. Possibly missing JSON or improperly formatted.")
+        if not cleaned_response:
+            raise ValueError("❌ Cleaned response is empty. Possibly missing JSON or improperly formatted.")
 
-try:
-    result = json.loads(cleaned_response)
-except json.JSONDecodeError as e:
-    print("⚠ JSON decode error. Raw response:")
-    print(response_text)
-    raise e
+        try:
+            result = json.loads(cleaned_response)
+        except json.JSONDecodeError as e:
+            print("⚠ JSON decode error. Raw response:")
+            print(response_text)
+            raise e
 
-
-        # ✅ Read structured_project_data.json
-        with open("structured_project_data.json", "r", encoding="utf-8") as f:
-            current_data = json.load(f)
-
-        project_id = max(item["project_id"] for item in current_data) + 1
-
-        entry = {
-            "project_id": project_id,
-            "file_name": file_name,
-            "project_title": result.get("Project Title", "N/A"),
-            "student_name": result.get("Student Name", "N/A"),
-            "college_name": result.get("College Name", "N/A"),
-            "guide_name": result.get("Guide Name", "N/A"),
-            "domain": result.get("Domain", "N/A"),
-            "abstract": result.get("Abstract", "N/A")
-        }
-
-        # ✅ Save to structured_project_data.json
-        # current_data.append(entry)
-        # with open("structured_project_data.json", "w", encoding="utf-8") as f:
-        #     json.dump(current_data, f, indent=2, ensure_ascii=False)
-
-        # ✅ Save to parsed_data.json
+        # ✅ Save to parsed_data.json only
         if os.path.exists("parsed_data.json"):
             with open("parsed_data.json", "r", encoding="utf-8") as f:
                 parsed_data = json.load(f)
@@ -119,16 +95,12 @@ except json.JSONDecodeError as e:
         with open("parsed_data.json", "w", encoding="utf-8") as f:
             json.dump(parsed_data, f, indent=2, ensure_ascii=False)
 
-        # ✅ Append to CSV
-        df = pd.DataFrame([entry])
-        df.to_csv("structured_project_data.csv", mode='a', index=False, header=False)
-
-        print(f"✅ Processed and added: {file_name}")
+        print(f"✅ Processed and added to parsed_data.json: {file_name}")
 
     except Exception as e:
         print(f"⚠️ Error processing {file_name}: {e}")
 
-# CLI usage (optional)
+# CLI usage
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
