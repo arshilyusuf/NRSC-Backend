@@ -7,11 +7,11 @@ import pandas as pd
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# Load API key from .env
+# Load API key
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
-    raise ValueError("⚠️ Missing GEMINI_API_KEY. Set it as an environment variable.")
+    raise ValueError("⚠️ Missing GEMINI_API_KEY.")
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
@@ -34,17 +34,13 @@ def get_pdf_dataframe():
 
             try:
                 doc = fitz.open(pdf_path)
-                full_text = ""
-                for page in doc:
-                    full_text += page.get_text()
+                full_text = " ".join(
+                    page.get_text() for page in doc
+                ).replace(",", "").replace("\n", " ").replace("\r", " ")
                 doc.close()
 
-                # Clean and truncate text to 5000 words
-                full_text = full_text.replace(",", "")
-                full_text = full_text.replace("\n", " ").replace("\r", " ")
                 full_text = re.sub(r"\s+", " ", full_text).strip()
-                words = full_text.split()
-                full_text = " ".join(words[:5000])
+                full_text = " ".join(full_text.split()[:5000])
 
             except Exception as e:
                 full_text = f"ERROR reading PDF: {e}"
@@ -57,26 +53,31 @@ def get_pdf_dataframe():
 
     return pd.DataFrame(pdf_data).sort_values("ID")
 
-# ✅ Load PDFs
-df_input = get_pdf_dataframe()
-output_data = []
-
-# ✅ Load existing JSON if available
+# Load existing data
 json_path = "parsed_data.json"
-if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
+csv_path = "structured_project_data.csv"
+
+if os.path.exists(json_path):
     with open(json_path, "r", encoding="utf-8") as f:
-        try:
-            parsed_json_data = json.load(f)
-        except json.JSONDecodeError:
-            print("JSONDecodeError: 'parsed_data.json' contains invalid JSON. Starting with an empty list.")
-            parsed_json_data = []
+        parsed_json_data = json.load(f)
 else:
     parsed_json_data = []
+
+if os.path.exists(csv_path):
+    df_existing = pd.read_csv(csv_path)
+else:
+    df_existing = pd.DataFrame()
+
+df_input = get_pdf_dataframe()
+output_data = []
 
 for _, row in df_input.iterrows():
     project_id = row["ID"]
     file_name = row["File Name"]
     full_text = row["Full Text"]
+
+    if file_name in df_existing.get("file_name", []):
+        continue  # Skip already processed files
 
     prompt = f"""
 You are an intelligent and precise information extraction assistant. From the provided project document text, extract and return ONLY a JSON object with the following fields:
@@ -87,28 +88,25 @@ You are an intelligent and precise information extraction assistant. From the pr
   "Student Name": "",
   "College Name": "",
   "Guide Name": "",
-  "Domain": "",  // This field must be chosen strictly from the list below
+  "Domain": "",
   "Abstract": ""
 }}
 
-The "Domain" field must contain exactly one of the following categories (whichever is most relevant to the text content):
+The "Domain" field must contain one of the following categories:
 
 ["Research based or innovation", "Technology Demonstration", "Software Development", "Hardware Development", "Cyber security", "AI", "ML", "DEEP LEARNING", "IOT", "Neural Netwrok", "Block Chain", "Agriculture", "Disaster Management Support", "Forestry & Ecology", "Geosciences", "LULC", "Rural Development", "Soils", "Urban & Infrastructure", "Water Resources", "Earth and Climatic Studies"]
-
-In case of ambiguity, choose the **most relevant** single domain based on the overall context.
 
 Text:
 ```{full_text}```
 
 IMPORTANT:
 - Return ONLY the JSON object.
-- Do NOT include any additional text, code blocks, or explanations.
 """.strip()
 
     try:
         response = model.generate_content(prompt)
-        cleaned_response = clean_json_response(response.text)
-        result = json.loads(cleaned_response)
+        cleaned = clean_json_response(response.text)
+        result = json.loads(cleaned)
 
         entry = {
             "project_id": project_id,
@@ -119,25 +117,23 @@ IMPORTANT:
             "guide_name": result.get("Guide Name", "N/A"),
             "domain": result.get("Domain", "N/A"),
             "abstract": result.get("Abstract", "N/A")
-           
         }
 
-        output_data.append(entry)
         parsed_json_data.append(entry)
+        output_data.append(entry)
 
-    except json.JSONDecodeError as je:
-        print(f"⚠️ JSON Error for {file_name}: {str(je)}")
     except Exception as e:
-        print(f"⚠️ Error for {file_name}: {str(e)}")
+        print(f"⚠️ Error processing {file_name}: {e}")
 
     time.sleep(5)
 
-# ✅ Save to CSV
-df_output = pd.DataFrame(output_data)
-df_output.to_csv("structured_project_data.csv", index=False)
-print("✅ Output saved to 'structured_project_data.csv'")
+# Save to files
+if output_data:
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(parsed_json_data, f, indent=2, ensure_ascii=False)
 
-# ✅ Save to JSON
-with open(json_path, "w", encoding="utf-8") as f:
-    json.dump(parsed_json_data, f, indent=2, ensure_ascii=False)
-print("✅ Output saved to 'parsed_data.json'")
+    df_combined = pd.concat([df_existing, pd.DataFrame(output_data)], ignore_index=True)
+    df_combined.to_csv(csv_path, index=False)
+    print("✅ Updated parsed_data.json and structured_project_data.csv")
+else:
+    print("✅ No new PDFs to process.")

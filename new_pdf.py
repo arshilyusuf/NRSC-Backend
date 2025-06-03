@@ -7,10 +7,11 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import time
 
+# Load environment
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
-    raise ValueError("⚠️ Missing GEMINI_API_KEY. Set it as an environment variable.")
+    raise ValueError("⚠️ Missing GEMINI_API_KEY.")
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
@@ -24,9 +25,7 @@ def clean_json_response(response_text):
 def extract_text_from_pdf(pdf_path):
     try:
         doc = fitz.open(pdf_path)
-        full_text = ""
-        for page in doc:
-            full_text += page.get_text()
+        full_text = " ".join(page.get_text() for page in doc)
         doc.close()
         full_text = full_text.replace(",", "").replace("\n", " ").replace("\r", " ")
         full_text = re.sub(r"\s+", " ", full_text).strip()
@@ -38,7 +37,7 @@ def process_new_pdf(pdf_path):
     file_name = os.path.basename(pdf_path)
     full_text = extract_text_from_pdf(pdf_path)
 
-    prompt =  f"""
+    prompt = f"""
 You are an intelligent and precise information extraction assistant. From the provided project document text, extract and return ONLY a JSON object with the following fields:
 
 {{
@@ -47,55 +46,58 @@ You are an intelligent and precise information extraction assistant. From the pr
   "Student Name": "",
   "College Name": "",
   "Guide Name": "",
-  "Domain": "",  // This field must be chosen strictly from the list below
+  "Domain": "",
   "Abstract": ""
 }}
 
-The "domain" field must contain exactly one of the following categories (whichever is most relevant to the text content):
+The "Domain" field must contain one of the following categories:
 
 ["Research based or innovation", "Technology Demonstration", "Software Development", "Hardware Development", "Cyber security", "AI", "ML", "DEEP LEARNING", "IOT", "Neural Netwrok", "Block Chain", "Agriculture", "Disaster Management Support", "Forestry & Ecology", "Geosciences", "LULC", "Rural Development", "Soils", "Urban & Infrastructure", "Water Resources", "Earth and Climatic Studies"]
-
-In case of ambiguity, choose the **most relevant** single domain based on the overall context.
 
 Text:
 ```{full_text}```
 
-IMPORTANT: 
+IMPORTANT:
 - Return ONLY the JSON object.
-- Do NOT include any additional text, code blocks, or explanations.
 """.strip()
 
     try:
         response = model.generate_content(prompt)
-        response_text = response.text.strip()
+        cleaned = clean_json_response(response.text)
+        result = json.loads(cleaned)
 
-        if not response_text:
-            raise ValueError("❌ Empty response from Gemini API.")
+        entry = {
+            "project_id": -1,  # or assign dynamically
+            "file_name": file_name,
+            "project_title": result.get("Project Title", "N/A"),
+            "student_name": result.get("Student Name", "N/A"),
+            "college_name": result.get("College Name", "N/A"),
+            "guide_name": result.get("Guide Name", "N/A"),
+            "domain": result.get("Domain", "N/A"),
+            "abstract": result.get("Abstract", "N/A")
+        }
 
-        cleaned_response = clean_json_response(response_text)
-
-        if not cleaned_response:
-            raise ValueError("❌ Cleaned response is empty. Possibly missing JSON or improperly formatted.")
-
-        try:
-            result = json.loads(cleaned_response)
-        except json.JSONDecodeError as e:
-            print("⚠ JSON decode error. Raw response:")
-            print(response_text)
-            raise e
-
-        # ✅ Save to parsed_data.json only
+        # Update parsed_data.json
         if os.path.exists("parsed_data.json"):
             with open("parsed_data.json", "r", encoding="utf-8") as f:
-                parsed_data = json.load(f)
+                parsed = json.load(f)
         else:
-            parsed_data = []
+            parsed = []
 
-        parsed_data.append(result)
+        parsed.append(entry)
         with open("parsed_data.json", "w", encoding="utf-8") as f:
-            json.dump(parsed_data, f, indent=2, ensure_ascii=False)
+            json.dump(parsed, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ Processed and added to parsed_data.json: {file_name}")
+        # Update structured_project_data.csv
+        if os.path.exists("structured_project_data.csv"):
+            df_csv = pd.read_csv("structured_project_data.csv")
+        else:
+            df_csv = pd.DataFrame()
+
+        df_csv = pd.concat([df_csv, pd.DataFrame([entry])], ignore_index=True)
+        df_csv.to_csv("structured_project_data.csv", index=False)
+
+        print(f"✅ Processed and added: {file_name}")
 
     except Exception as e:
         print(f"⚠️ Error processing {file_name}: {e}")
